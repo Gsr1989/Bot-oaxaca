@@ -20,7 +20,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 BASE_URL = os.getenv("BASE_URL", "").rstrip("/")
 OUTPUT_DIR = "documentos"
-PLANTILLA_OAXACA = "oaxacachido.pdf"
+PLANTILLA_OAXACA = "oaxaca_plantilla_imagen.pdf"
 PLANTILLA_OAXACA_SEGUNDA = "oaxacaverga.pdf"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
