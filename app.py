@@ -13,6 +13,7 @@ from aiogram.filters import Command
 from aiogram.types import FSInputFile
 from contextlib import asynccontextmanager, suppress
 import asyncio
+import qrcode
 
 # ------------ CONFIG ------------
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
