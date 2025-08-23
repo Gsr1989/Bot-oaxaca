@@ -9,5 +9,4 @@ Flask==2.3.3
 gunicorn==21.2.0
 reportlab==4.0.5
 python-dotenv==1.0.1
-PyMuPDF==1.23.7
 qrcode==7.3.1
