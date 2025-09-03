@@ -480,11 +480,13 @@ body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#ff9a9e 0%,#
 .btn{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;padding:15px 30px;border-radius:25px;font-size:1.1em;font-weight:600;cursor:pointer;transition:transform 0.2s}
 .btn:hover{transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,0.3)}
 .note{background:#e3f2fd;padding:15px;border-radius:10px;color:#1976d2;margin:20px 0;font-size:0.9em}
+.qr-highlight{background:#e8f5e8;border-left:4px solid #28a745;padding:15px;margin:20px 0;font-size:0.95em;color:#155724}
 </style></head><body><div class="container"><div class="header"><h1>🏛️ ESTADO DE OAXACA</h1><h2>Consulta de Permiso de Circulación</h2></div>
 <div class="info">Ingrese su número de folio para consultar el estado de su permiso:</div>
 <div class="input-group"><input type="text" id="folioInput" placeholder="Ejemplo: 1770" maxlength="10"></div>
 <button class="btn" onclick="consultarFolio()">🔍 Consultar Estado</button>
-<div class="note">💡 <strong>Nuevo:</strong> Si tiene un QR en su permiso nuevo, solo escaneelo - ya no necesita escribir el folio.</div>
+<div class="qr-highlight">🆕 <strong>NOVEDAD:</strong> Los nuevos permisos tienen QR que reemplaza el texto del folio. Solo escanéelo para acceso directo.</div>
+<div class="note">💡 Si tiene un permiso anterior, puede consultar escribiendo el folio aquí.</div>
 </div><script>function consultarFolio(){const folio=document.getElementById('folioInput').value.trim();if(!folio){alert('Por favor ingrese un número de folio válido');return;}window.location.href=`/consulta/${folio}`;}
 document.getElementById('folioInput').addEventListener('keypress',function(e){if(e.key==='Enter'){consultarFolio();}});</script></body></html>"""
     return HTMLResponse(content=html_redirect)
@@ -502,8 +504,9 @@ async def health():
         "ok": True, 
         "bot": "Oaxaca Permisos Sistema", 
         "status": "running",
-        "qr_dinamico": "ACTIVADO",
-        "url_consulta": URL_CONSULTA_BASE
+        "qr_dinamico": "REEMPLAZA_TEXTO_COMPLETO",
+        "url_consulta": URL_CONSULTA_BASE,
+        "coordenadas_qr": coords_qr_dinamico
     }
 
 if __name__ == '__main__':
@@ -512,9 +515,11 @@ if __name__ == '__main__':
         port = int(os.getenv("PORT", 8000))
         print(f"[ARRANQUE OAXACA] Servidor iniciando en puerto {port}")
         print(f"[QR DINÁMICO] URL base: {URL_CONSULTA_BASE}")
+        print(f"[QR POSICIÓN] X:{coords_qr_dinamico['x']}, Y:{coords_qr_dinamico['y']}")
+        print(f"[REEMPLAZO TOTAL] QR sustituye 100% el texto del folio")
         print(f"[ENDPOINTS] /consulta/{{folio}} - QR directo")
         print(f"[ENDPOINTS] /consulta_folio - Entrada manual legacy")
-        print(f"[SISTEMA] Oaxaca con QR inteligente completamente activado")
+        print(f"[SISTEMA] Oaxaca QR dinámico ACTIVO - texto eliminado")
         uvicorn.run(app, host="0.0.0.0", port=port)
     except Exception as e:
         print(f"[ERROR FATAL] No se pudo iniciar: {e}")
