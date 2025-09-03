@@ -1,4 +1,3 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from supabase import create_client, Client
@@ -788,15 +787,75 @@ async def consulta_folio_legacy():
     """
     return HTMLResponse(content=html_redirect)
 
+# ------------ ENDPOINT ADICIONAL PARA COMPATIBILIDAD ------------
+@app.get("/consulta_folio")
+async def consulta_folio_legacy():
+    html_redirect = """
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Sistema de Consulta Oaxaca</title>
+        <style>
+            body { 
+                font-family: Arial, sans-serif; 
+                background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+                margin: 0; padding: 20px; min-height: 100vh;
+                display: flex; align-items: center; justify-content: center;
+            }
+            .container { 
+                max-width: 450px; background: white; border-radius: 20px; 
+                box-shadow: 0 15px 35px rgba(0,0,0,0.1); padding: 40px 30px; text-align: center;
+            }
+            .input-group input { 
+                width: 100%; padding: 15px; border: 2px solid #ddd; border-radius: 10px; 
+                font-size: 1.1em; text-align: center; letter-spacing: 1px;
+            }
+            .btn { 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white; border: none; padding: 15px 30px; border-radius: 25px; 
+                font-size: 1.1em; font-weight: 600; cursor: pointer;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🏛️ ESTADO DE OAXACA</h1>
+            <h2>Consulta de Permiso</h2>
+            <p>Ingrese su folio:</p>
+            <div class="input-group">
+                <input type="text" id="folioInput" placeholder="Ejemplo: 1770" maxlength="10">
+            </div>
+            <button class="btn" onclick="consultarFolio()">🔍 Consultar Estado</button>
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; color: #1976d2; margin: 20px 0;">
+                💡 <strong>Nuevo:</strong> Si tiene QR en su permiso, solo escaneelo.
+            </div>
+        </div>
+        <script>
+            function consultarFolio() {
+                const folio = document.getElementById('folioInput').value.trim();
+                if (!folio) {
+                    alert('Por favor ingrese un folio válido');
+                    return;
+                }
+                window.location.href = `/consulta/${folio}`;
+            }
+            document.getElementById('folioInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') consultarFolio();
+            });
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_redirect)
+
 if __name__ == '__main__':
     try:
         import uvicorn
         port = int(os.getenv("PORT", 8000))
         print(f"[ARRANQUE OAXACA] Servidor iniciando en puerto {port}")
         print(f"[QR DINÁMICO] URL base: {URL_CONSULTA_BASE}")
-        print(f"[ENDPOINTS] /consulta/{{folio}} - QR directo")
-        print(f"[ENDPOINTS] /consulta_folio - Entrada manual legacy")
-        print(f"[SISTEMA] Oaxaca con QR inteligente completamente activado")
         uvicorn.run(app, host="0.0.0.0", port=port)
     except Exception as e:
         print(f"[ERROR FATAL] No se pudo iniciar: {e}")
