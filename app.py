@@ -5,6 +5,7 @@ from supabase import create_client, Client
 import fitz
 import os
 from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from aiogram import Bot, Dispatcher, types
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
@@ -14,7 +15,7 @@ from aiogram.types import FSInputFile
 from contextlib import asynccontextmanager, suppress
 import asyncio
 import qrcode
-from io import BytesIO  # ← ESTA LÍNEA TE FALTA
+from io import BytesIO
 
 # ------------ CONFIG ------------
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
@@ -24,6 +25,9 @@ BASE_URL = os.getenv("BASE_URL", "").rstrip("/")
 OUTPUT_DIR = "documentos"
 PLANTILLA_OAXACA = "oaxaca_plantilla_imagen.pdf"
 PLANTILLA_OAXACA_SEGUNDA = "oaxacaverga.pdf"
+
+# URL de consulta base (sin /consulta_folio al final)
+URL_CONSULTA_BASE = "https://oaxaca-gob-semovi.onrender.com"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -54,7 +58,6 @@ class PermisoForm(StatesGroup):
 
 # ------------ COORDENADAS OAXACA ------------
 coords_oaxaca = {
-    # Plantilla original (oaxacachido.pdf)
     "folio": (553,96,16,(1,0,0)),
     "fecha1": (168,130,12,(0,0,0)),
     "fecha2": (140,540,10,(0,0,0)),
@@ -68,25 +71,53 @@ coords_oaxaca = {
     "nombre": (133,149,10,(0,0,0)),
 }
 
-# Coordenadas para la segunda plantilla (oaxacaverga.pdf)
 coords_oaxaca_segunda = {
     "fecha_exp": (136, 141, 10, (0,0,0)),
     "numero_serie": (136, 166, 10, (0,0,0)),
     "hora": (146, 206, 10, (0,0,0)),
 }
 
-# ------------ GENERACIÓN PDF OAXACA ------------
+# ------------ FUNCIÓN QR DINÁMICO ------------
+def generar_qr_dinamico_oaxaca(folio):
+    """
+    Genera QR que lleva directamente al estado del folio
+    """
+    try:
+        # URL directa al estado del folio (SIN necesidad de escribirlo)
+        url_directa = f"{URL_CONSULTA_BASE}/consulta/{folio}"
+        
+        # Crear QR más pequeño y limpio
+        qr = qrcode.QRCode(
+            version=2,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=8,
+            border=2
+        )
+        qr.add_data(url_directa)
+        qr.make(fit=True)
+
+        # Generar imagen
+        img_qr = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+        
+        print(f"[QR DINÁMICO] Generado para folio {folio} -> {url_directa}")
+        return img_qr, url_directa
+        
+    except Exception as e:
+        print(f"[ERROR QR] {e}")
+        return None, None
+
+# ------------ GENERACIÓN PDF OAXACA CON QR DINÁMICO ------------
 def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
     """
-    Genera AMBAS plantillas de Oaxaca en un solo PDF multi-página
+    Genera AMBAS plantillas de Oaxaca con QR dinámico
     """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
-    # === PRIMERA PLANTILLA (oaxacachido.pdf) ===
+    # === PRIMERA PLANTILLA CON QR DINÁMICO ===
     doc_original = fitz.open(PLANTILLA_OAXACA)
     pg1 = doc_original[0]
     
-    # Insertar datos en primera plantilla
+    # Insertar datos normales
     pg1.insert_text(coords_oaxaca["folio"][:2], folio, 
                     fontsize=coords_oaxaca["folio"][2], 
                     color=coords_oaxaca["folio"][3])
@@ -113,50 +144,35 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
                     fontsize=coords_oaxaca["nombre"][2], 
                     color=coords_oaxaca["nombre"][3])
 
-    # --- Generar QR para primera plantilla ---
-    texto_qr = f"""FOLIO: {folio}
-NOMBRE: {datos.get('nombre', '')}
-MARCA: {datos.get('marca', '')}
-LINEA: {datos.get('linea', '')}
-AÑO: {datos.get('anio', '')}
-SERIE: {datos.get('serie', '')}
-MOTOR: {datos.get('motor', '')}
-COLOR: {datos.get('color', '')}
-OAXACA PERMISOS DIGITALES"""
-
-    qr = qrcode.QRCode(
-        version=2,
-        error_correction=qrcode.constants.ERROR_CORRECT_H,
-        box_size=10,
-        border=2
-    )
-    qr.add_data(texto_qr.upper())
-    qr.make(fit=True)
-
-    img_qr = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-    buf = BytesIO()
-    img_qr.save(buf, format="PNG")
-    buf.seek(0)
-    qr_pix = fitz.Pixmap(buf.read())
-
-    # Insertar QR en primera plantilla
-    cm = 42.52
-    ancho_qr = alto_qr = cm * 1.5
-    page_width = pg1.rect.width
-    x_qr = page_width - (0.5 * cm) - ancho_qr
-    y_qr = 11.5 * cm
-
-    pg1.insert_image(
-        fitz.Rect(x_qr, y_qr, x_qr + ancho_qr, y_qr + alto_qr),
-        pixmap=qr_pix,
-        overlay=True
-    )
+    # --- GENERAR QR DINÁMICO (NO TEXTO ESTÁTICO) ---
+    img_qr, url_qr = generar_qr_dinamico_oaxaca(folio)
     
-    # === SEGUNDA PLANTILLA (oaxacaverga.pdf) ===
+    if img_qr:
+        # Convertir imagen PIL a bytes para PyMuPDF
+        buf = BytesIO()
+        img_qr.save(buf, format="PNG")
+        buf.seek(0)
+        qr_pix = fitz.Pixmap(buf.read())
+
+        # Insertar QR en posición fija
+        cm = 42.52
+        ancho_qr = alto_qr = cm * 1.5
+        page_width = pg1.rect.width
+        x_qr = page_width - (0.5 * cm) - ancho_qr
+        y_qr = 11.5 * cm
+
+        pg1.insert_image(
+            fitz.Rect(x_qr, y_qr, x_qr + ancho_qr, y_qr + alto_qr),
+            pixmap=qr_pix,
+            overlay=True
+        )
+        
+        print(f"[QR INSERTADO] URL: {url_qr}")
+    
+    # === SEGUNDA PLANTILLA ===
     doc_segunda = fitz.open(PLANTILLA_OAXACA_SEGUNDA)
     pg2 = doc_segunda[0]
     
-    # Insertar datos en segunda plantilla
     pg2.insert_text(coords_oaxaca_segunda["fecha_exp"][:2], 
                     fecha_exp.strftime("%d/%m/%Y"), 
                     fontsize=coords_oaxaca_segunda["fecha_exp"][2])
@@ -169,35 +185,289 @@ OAXACA PERMISOS DIGITALES"""
                     fecha_exp.strftime("%H:%M:%S"), 
                     fontsize=coords_oaxaca_segunda["hora"][2])
     
-    # === COMBINAR AMBAS PLANTILLAS EN UN SOLO PDF ===
-    # Crear documento final
+    # === COMBINAR EN PDF FINAL ===
     doc_final = fitz.open()
-    
-    # Insertar primera página (plantilla original)
     doc_final.insert_pdf(doc_original)
-    
-    # Insertar segunda página (plantilla nueva)
     doc_final.insert_pdf(doc_segunda)
     
-    # Guardar el PDF combinado
     salida = os.path.join(OUTPUT_DIR, f"{folio}_oaxaca_completo.pdf")
     doc_final.save(salida)
     
-    # Cerrar todos los documentos
     doc_original.close()
     doc_segunda.close()
     doc_final.close()
     
     return salida
 
-# ------------ HANDLERS OAXACA ------------
+# ------------ ENDPOINT PARA CONSULTA DIRECTA ------------
+@app.get("/consulta/{folio}")
+async def consulta_folio_directo(folio: str):
+    """
+    Endpoint que recibe el folio desde el QR y muestra el estado automáticamente
+    """
+    try:
+        # Buscar folio en la base de datos
+        response = supabase.table("folios_registrados") \
+            .select("*") \
+            .eq("folio", folio) \
+            .eq("entidad", "oaxaca") \
+            .execute()
+        
+        if response.data:
+            registro = response.data[0]
+            fecha_vencimiento = datetime.fromisoformat(registro["fecha_vencimiento"]).date()
+            hoy = datetime.now().date()
+            
+            # Determinar estado del permiso
+            if fecha_vencimiento >= hoy:
+                estado_visual = "VIGENTE"
+                color_estado = "#28a745"
+                icono = "✅"
+                mensaje = "Su permiso está ACTIVO para circular"
+            else:
+                estado_visual = "VENCIDO"
+                color_estado = "#dc3545"
+                icono = "❌"
+                mensaje = "Su permiso ha VENCIDO. Debe renovar"
+            
+            # HTML elegante para mostrar el estado
+            html_content = f"""
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Consulta Permiso Oaxaca - Folio {folio}</title>
+                <style>
+                    body {{ 
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+                        background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+                        margin: 0; 
+                        padding: 20px;
+                        min-height: 100vh;
+                    }}
+                    .container {{ 
+                        max-width: 450px; 
+                        margin: 0 auto; 
+                        background: white; 
+                        border-radius: 20px; 
+                        box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+                        overflow: hidden;
+                        animation: slideIn 0.5s ease-out;
+                    }}
+                    @keyframes slideIn {{
+                        from {{ transform: translateY(30px); opacity: 0; }}
+                        to {{ transform: translateY(0); opacity: 1; }}
+                    }}
+                    .header {{ 
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white; 
+                        padding: 30px 20px; 
+                        text-align: center; 
+                    }}
+                    .header h1 {{ margin: 0; font-size: 1.4em; }}
+                    .header h2 {{ margin: 10px 0 0 0; font-size: 1em; opacity: 0.9; }}
+                    .content {{ 
+                        padding: 40px 30px; 
+                        text-align: center; 
+                    }}
+                    .estado {{ 
+                        font-size: 2.2em; 
+                        font-weight: 700; 
+                        color: {color_estado}; 
+                        margin: 20px 0; 
+                        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }}
+                    .folio {{ 
+                        font-size: 1.6em; 
+                        font-weight: bold; 
+                        color: #333; 
+                        margin: 15px 0;
+                        letter-spacing: 1px; 
+                        background: #f8f9fa;
+                        padding: 10px;
+                        border-radius: 8px;
+                    }}
+                    .mensaje {{ 
+                        font-size: 1.1em; 
+                        color: #555; 
+                        margin: 25px 0; 
+                        line-height: 1.6;
+                    }}
+                    .info-box {{ 
+                        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                        border-radius: 12px;
+                        padding: 20px;
+                        margin: 20px 0;
+                        text-align: left;
+                    }}
+                    .info-row {{ 
+                        display: flex; 
+                        justify-content: space-between; 
+                        margin: 8px 0;
+                        padding: 5px 0;
+                        border-bottom: 1px solid #dee2e6;
+                    }}
+                    .info-row:last-child {{ border-bottom: none; }}
+                    .label {{ font-weight: 600; color: #495057; }}
+                    .value {{ color: #6c757d; }}
+                    .footer {{ 
+                        background: #f8f9fa; 
+                        padding: 20px; 
+                        text-align: center; 
+                        font-size: 0.85em; 
+                        color: #6c757d;
+                        border-top: 1px solid #dee2e6;
+                    }}
+                    .refresh-btn {{
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border: none;
+                        padding: 12px 25px;
+                        border-radius: 25px;
+                        font-size: 0.9em;
+                        font-weight: 600;
+                        margin: 20px 0;
+                        cursor: pointer;
+                        transition: transform 0.2s;
+                    }}
+                    .refresh-btn:hover {{
+                        transform: translateY(-2px);
+                        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>🏛️ ESTADO DE OAXACA</h1>
+                        <h2>Consulta de Permiso de Circulación</h2>
+                    </div>
+                    
+                    <div class="content">
+                        <div class="estado">{icono} {estado_visual}</div>
+                        <div class="folio">Folio: {folio}</div>
+                        <div class="mensaje">{mensaje}</div>
+                        
+                        <div class="info-box">
+                            <div class="info-row">
+                                <span class="label">Vehículo:</span>
+                                <span class="value">{registro["marca"]} {registro["linea"]}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Año:</span>
+                                <span class="value">{registro["anio"]}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Serie:</span>
+                                <span class="value">{registro["numero_serie"]}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Motor:</span>
+                                <span class="value">{registro["numero_motor"]}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Color:</span>
+                                <span class="value">{registro["color"]}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Titular:</span>
+                                <span class="value">{registro["nombre"]}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Fecha de Vencimiento:</span>
+                                <span class="value">{fecha_vencimiento.strftime("%d/%m/%Y")}</span>
+                            </div>
+                        </div>
+                        
+                        <button class="refresh-btn" onclick="window.location.reload()">
+                            🔄 Actualizar Estado
+                        </button>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>📅 Consulta: {datetime.now().strftime("%d/%m/%Y a las %H:%M")}</p>
+                        <p>🌮 Sistema Digital de Oaxaca</p>
+                    </div>
+                </div>
+                
+                <script>
+                    // Auto-refresh cada 30 segundos
+                    setTimeout(() => window.location.reload(), 30000);
+                </script>
+            </body>
+            </html>
+            """
+            
+            return HTMLResponse(content=html_content)
+        
+        else:
+            # Folio no encontrado
+            html_no_encontrado = f"""
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Folio No Encontrado - Oaxaca</title>
+                <style>
+                    body {{ 
+                        font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+                        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+                        margin: 0; 
+                        padding: 20px;
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }}
+                    .container {{ 
+                        max-width: 400px; 
+                        background: white; 
+                        border-radius: 20px; 
+                        box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+                        padding: 40px 30px;
+                        text-align: center;
+                        animation: shake 0.5s ease-in-out;
+                    }}
+                    @keyframes shake {{
+                        0%, 100% {{ transform: translateX(0); }}
+                        25% {{ transform: translateX(-5px); }}
+                        75% {{ transform: translateX(5px); }}
+                    }}
+                    .icono {{ font-size: 4em; margin-bottom: 20px; }}
+                    .titulo {{ font-size: 1.5em; font-weight: bold; color: #333; margin-bottom: 15px; }}
+                    .mensaje {{ color: #666; line-height: 1.6; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="icono">❌</div>
+                    <div class="titulo">Folio No Encontrado</div>
+                    <div class="mensaje">
+                        El folio <strong>{folio}</strong> no está registrado en el sistema de Oaxaca.<br><br>
+                        🔍 Verifique que el código QR sea correcto.<br>
+                        🌮 O solicite un nuevo permiso.
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            return HTMLResponse(content=html_no_encontrado)
+            
+    except Exception as e:
+        print(f"[ERROR] Consulta folio {folio}: {e}")
+        return HTMLResponse(content=f"<h1>Error del sistema: {str(e)}</h1>")
+
+# ------------ HANDLERS OAXACA (MODIFICADOS) ------------
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer(
         "🌮 ¡Órale! Sistema Digital de Permisos OAXACA.\n"
         "Aquí se trabaja en serio y sin mamadas, compadre.\n\n"
-        "🚗 Usa /permiso para tramitar tu documento oficial de Oaxaca."
+        "🚗 Usa /permiso para tramitar tu documento oficial de Oaxaca.\n\n"
+        "✨ NOVEDAD: Ahora con QR inteligente que va directo al estado de tu permiso."
     )
 
 @dp.message(Command("permiso"))
@@ -289,28 +559,27 @@ async def get_nombre(message: types.Message, state: FSMContext):
     datos["nombre"] = nombre
     datos["folio"] = nuevo_folio()
 
-    # -------- FECHAS --------
     hoy = datetime.now()
     fecha_ven = hoy + timedelta(days=30)
-    # -------------------------
 
     await message.answer(
         f"🔄 PROCESANDO PERMISO DE OAXACA...\n"
         f"Folio: {datos['folio']}\n"
         f"Titular: {nombre}\n\n"
-        "Generando ambas plantillas oficiales..."
+        "🆕 Generando con QR dinámico inteligente..."
     )
 
     try:
-        # Generar PDF con ambas plantillas
+        # Generar PDF con QR dinámico
         pdf_path = generar_pdf_oaxaca_completo(datos['folio'], datos, hoy, fecha_ven)
 
         await message.answer_document(
             FSInputFile(pdf_path),
-            caption=f"📋 PERMISO OFICIAL OAXACA\n"
+            caption=f"📋 PERMISO OFICIAL OAXACA CON QR INTELIGENTE\n"
                    f"Folio: {datos['folio']}\n"
                    f"Vigencia: 30 días\n"
-                   f"🌮 Documento con ambas plantillas incluidas"
+                   f"🔗 QR incluido - escanear para ver estado automáticamente\n"
+                   f"🌮 Documento completo con ambas plantillas"
         )
 
         # Guardar en base de datos
@@ -329,14 +598,15 @@ async def get_nombre(message: types.Message, state: FSMContext):
         }).execute()
 
         await message.answer(
-            f"🎯 PERMISO DE OAXACA GENERADO EXITOSAMENTE\n\n"
+            f"🎯 PERMISO DE OAXACA GENERADO CON ÉXITO\n\n"
             f"📄 Folio: {datos['folio']}\n"
             f"🚗 Vehículo: {datos['marca']} {datos['linea']} {datos['anio']}\n"
             f"📅 Vigencia: 30 días\n"
             f"✅ Estado: ACTIVO\n\n"
-            "Su documento incluye:\n"
-            "• Página 1: Permiso principal con QR\n"
-            "• Página 2: Documento de verificación\n\n"
+            "🆕 NUEVA FUNCIONALIDAD:\n"
+            f"🔗 Su permiso incluye QR inteligente\n"
+            f"📱 Al escanearlo va directo al estado: {URL_CONSULTA_BASE}/consulta/{datos['folio']}\n"
+            f"❌ YA NO necesita escribir el folio manualmente\n\n"
             "Para otro trámite, use /permiso nuevamente."
         )
         
@@ -344,8 +614,7 @@ async def get_nombre(message: types.Message, state: FSMContext):
         await message.answer(
             f"💥 ERROR EN EL SISTEMA DE OAXACA\n\n"
             f"Fallo: {str(e)}\n\n"
-            "Intente nuevamente con /permiso\n"
-            "Si persiste, contacte al administrador."
+            "Intente nuevamente con /permiso"
         )
     finally:
         await state.clear()
@@ -356,7 +625,7 @@ async def fallback(message: types.Message):
         "🌮 No entiendo, compadre. Use /permiso para tramitar en Oaxaca.",
         "🚗 Para permisos de Oaxaca use: /permiso",
         "🎯 Directo al grano: /permiso para iniciar su trámite oaxaqueño.",
-        "🔥 Sistema de Oaxaca: /permiso es lo que necesita.",
+        "🔥 Sistema de Oaxaca con QR inteligente: /permiso",
     ]
     import random
     await message.answer(random.choice(respuestas_random))
@@ -390,3 +659,144 @@ async def telegram_webhook(request: Request):
     update = types.Update(**data)
     await dp.feed_webhook_update(bot, update)
     return {"ok": True}
+
+@app.get("/")
+async def health():
+    return {
+        "ok": True, 
+        "bot": "Oaxaca Permisos Sistema", 
+        "status": "running",
+        "qr_dinamico": "ACTIVADO",
+        "url_consulta": URL_CONSULTA_BASE
+    }
+
+# ------------ NUEVO
+# ------------ ENDPOINT ADICIONAL PARA COMPATIBILIDAD ------------
+@app.get("/consulta_folio")
+async def consulta_folio_legacy():
+    """
+    Endpoint legacy que mantiene compatibilidad con la URL actual
+    Redirige a la nueva funcionalidad
+    """
+    html_redirect = """
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Sistema de Consulta Oaxaca</title>
+        <style>
+            body { 
+                font-family: Arial, sans-serif; 
+                background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+                margin: 0; 
+                padding: 20px;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .container { 
+                max-width: 450px; 
+                background: white; 
+                border-radius: 20px; 
+                box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+                padding: 40px 30px;
+                text-align: center;
+            }
+            .header { color: #333; margin-bottom: 30px; }
+            .info { color: #666; line-height: 1.6; margin: 20px 0; }
+            .input-group { margin: 25px 0; }
+            .input-group input { 
+                width: 100%; 
+                padding: 15px; 
+                border: 2px solid #ddd; 
+                border-radius: 10px; 
+                font-size: 1.1em;
+                text-align: center;
+                letter-spacing: 1px;
+            }
+            .btn { 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 25px;
+                font-size: 1.1em;
+                font-weight: 600;
+                cursor: pointer;
+                transition: transform 0.2s;
+            }
+            .btn:hover { 
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            }
+            .note { 
+                background: #e3f2fd; 
+                padding: 15px; 
+                border-radius: 10px; 
+                color: #1976d2; 
+                margin: 20px 0;
+                font-size: 0.9em;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🏛️ ESTADO DE OAXACA</h1>
+                <h2>Consulta de Permiso de Circulación</h2>
+            </div>
+            
+            <div class="info">
+                Ingrese su número de folio para consultar el estado de su permiso:
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="folioInput" placeholder="Ejemplo: 1770" maxlength="10">
+            </div>
+            
+            <button class="btn" onclick="consultarFolio()">
+                🔍 Consultar Estado
+            </button>
+            
+            <div class="note">
+                💡 <strong>Nuevo:</strong> Si tiene un QR en su permiso nuevo, solo escaneelo - ya no necesita escribir el folio.
+            </div>
+        </div>
+        
+        <script>
+            function consultarFolio() {
+                const folio = document.getElementById('folioInput').value.trim();
+                if (!folio) {
+                    alert('Por favor ingrese un número de folio válido');
+                    return;
+                }
+                // Redirigir a la nueva URL dinámica
+                window.location.href = `/consulta/${folio}`;
+            }
+            
+            // Permitir consulta con Enter
+            document.getElementById('folioInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    consultarFolio();
+                }
+            });
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_redirect)
+
+if __name__ == '__main__':
+    try:
+        import uvicorn
+        port = int(os.getenv("PORT", 8000))
+        print(f"[ARRANQUE OAXACA] Servidor iniciando en puerto {port}")
+        print(f"[QR DINÁMICO] URL base: {URL_CONSULTA_BASE}")
+        print(f"[ENDPOINTS] /consulta/{{folio}} - QR directo")
+        print(f"[ENDPOINTS] /consulta_folio - Entrada manual legacy")
+        print(f"[SISTEMA] Oaxaca con QR inteligente completamente activado")
+        uvicorn.run(app, host="0.0.0.0", port=port)
+    except Exception as e:
+        print(f"[ERROR FATAL] No se pudo iniciar: {e}")
