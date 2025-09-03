@@ -148,11 +148,10 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
         buf.seek(0)
         qr_pix = fitz.Pixmap(buf.read())
 
-        cm = 42.52
-        ancho_qr = alto_qr = cm * 1.5
-        page_width = pg1.rect.width
-        x_qr = page_width - (0.5 * cm) - ancho_qr
-        y_qr = 11.5 * cm
+        x_qr = 56        # Posición X del QR de arriba izquierda
+        y_qr = 375       # Posición Y del QR de arriba izquierda  
+        ancho_qr = 140   # Ancho del QR
+        alto_qr = 140    # Alto del QR
 
         pg1.insert_image(
             fitz.Rect(x_qr, y_qr, x_qr + ancho_qr, y_qr + alto_qr),
