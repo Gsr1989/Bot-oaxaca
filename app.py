@@ -122,8 +122,7 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
     doc_original = fitz.open(PLANTILLA_OAXACA)
     pg1 = doc_original[0]
     
-    # ❌ YA NO insertamos texto del folio aquí
-    # pg1.insert_text(coords_oaxaca["folio"][:2], folio, ...)  <-- ELIMINADO
+    # ❌ YA NO insertamos texto del folio aquí - ELIMINADO COMPLETAMENTE
     
     # ✅ SOLO insertamos el resto de datos (fechas, vehículo, etc.)
     f1 = fecha_exp.strftime("%d/%m/%Y")
@@ -149,7 +148,7 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
                     fontsize=coords_oaxaca["nombre"][2], 
                     color=coords_oaxaca["nombre"][3])
 
-    # ✅ INSERTAR QR DINÁMICO EN EL LUGAR EXACTO DONDE ESTABA EL TEXTO DEL FOLIO
+    # 🔥 AQUÍ ESTÁ LA CLAVE: INSERTAR QR DINÁMICO EN LUGAR DEL TEXTO
     img_qr, url_qr = generar_qr_dinamico_oaxaca(folio)
     
     if img_qr:
@@ -170,15 +169,16 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
             overlay=True
         )
         
-        print(f"[QR REEMPLAZA TEXTO] Folio {folio} en posición ({x_qr}, {y_qr})")
+        print(f"[QR INSERTADO] Folio {folio} en posición ({x_qr}, {y_qr})")
         print(f"[URL QR] {url_qr}")
+        print(f"[DIMENSIONES QR] {ancho_qr}x{alto_qr}")
     else:
         # Si falla el QR, insertar al menos el folio como texto de respaldo
-        print(f"[FALLBACK] Insertando texto del folio como respaldo")
-        pg1.insert_text((coords_qr_dinamico["x"], coords_qr_dinamico["y"] + 20), 
-                       folio, fontsize=14, color=(1,0,0))
+        print(f"[FALLBACK] Error generando QR, insertando texto del folio")
+        pg1.insert_text((coords_qr_dinamico["x"], coords_qr_dinamico["y"] + 15), 
+                       folio, fontsize=12, color=(1,0,0))
     
-    # Procesar segunda plantilla
+    # Procesar segunda plantilla (sin cambios)
     doc_segunda = fitz.open(PLANTILLA_OAXACA_SEGUNDA)
     pg2 = doc_segunda[0]
     
