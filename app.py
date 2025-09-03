@@ -56,9 +56,9 @@ class PermisoForm(StatesGroup):
     color = State()
     nombre = State()
 
-# ------------ COORDENADAS OAXACA ------------
+# ------------ COORDENADAS OAXACA (SIN FOLIO TEXTO) ------------
 coords_oaxaca = {
-    "folio": (553,96,16,(1,0,0)),
+    # ELIMINAMOS "folio" porque ahora será QR dinámico
     "fecha1": (168,130,12,(0,0,0)),
     "fecha2": (140,540,10,(0,0,0)),
     "marca": (50,215,12,(0,0,0)),
@@ -71,25 +71,33 @@ coords_oaxaca = {
     "nombre": (133,149,10,(0,0,0)),
 }
 
+# COORDENADAS PARA EL QR DINÁMICO (DONDE ANTES ESTABA EL TEXTO DEL FOLIO)
+coords_qr_dinamico = {
+    "x": 553,      # Misma X donde estaba el texto del folio
+    "y": 76,       # Ajustada para centrar el QR donde estaba el texto
+    "ancho": 40,   # Tamaño apropiado para que sea visible pero no muy grande
+    "alto": 40     # Mismo alto que ancho para mantener proporción
+}
+
 coords_oaxaca_segunda = {
     "fecha_exp": (136, 141, 10, (0,0,0)),
     "numero_serie": (136, 166, 10, (0,0,0)),
     "hora": (146, 206, 10, (0,0,0)),
 }
 
-# ------------ FUNCIÓN QR DINÁMICO ------------
+# ------------ FUNCIÓN QR DINÁMICO MEJORADA ------------
 def generar_qr_dinamico_oaxaca(folio):
     """
-    Genera QR que lleva directamente al estado del folio
+    Genera QR compacto y optimizado para insertar donde estaba el texto
     """
     try:
         url_directa = f"{URL_CONSULTA_BASE}/consulta/{folio}"
         
         qr = qrcode.QRCode(
-            version=2,
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
-            box_size=8,
-            border=2
+            version=1,  # Versión más pequeña para menor tamaño
+            error_correction=qrcode.constants.ERROR_CORRECT_L,  # Menor corrección = menor tamaño
+            box_size=3,  # Tamaño de caja más pequeño
+            border=1     # Borde mínimo
         )
         qr.add_data(url_directa)
         qr.make(fit=True)
@@ -97,26 +105,27 @@ def generar_qr_dinamico_oaxaca(folio):
         img_qr = qr.make_image(fill_color="black", back_color="white").convert("RGB")
         
         print(f"[QR DINÁMICO] Generado para folio {folio} -> {url_directa}")
+        print(f"[POSICIÓN] X:{coords_qr_dinamico['x']}, Y:{coords_qr_dinamico['y']}")
         return img_qr, url_directa
         
     except Exception as e:
         print(f"[ERROR QR] {e}")
         return None, None
 
-# ------------ GENERACIÓN PDF OAXACA CON QR DINÁMICO ------------
+# ------------ GENERACIÓN PDF OAXACA CON QR EN LUGAR DEL TEXTO ------------
 def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
     """
-    Genera AMBAS plantillas de Oaxaca con QR dinámico
+    Genera AMBAS plantillas de Oaxaca con QR dinámico REEMPLAZANDO el texto del folio
     """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
     doc_original = fitz.open(PLANTILLA_OAXACA)
     pg1 = doc_original[0]
     
-    pg1.insert_text(coords_oaxaca["folio"][:2], folio, 
-                    fontsize=coords_oaxaca["folio"][2], 
-                    color=coords_oaxaca["folio"][3])
+    # ❌ YA NO insertamos texto del folio aquí
+    # pg1.insert_text(coords_oaxaca["folio"][:2], folio, ...)  <-- ELIMINADO
     
+    # ✅ SOLO insertamos el resto de datos (fechas, vehículo, etc.)
     f1 = fecha_exp.strftime("%d/%m/%Y")
     f_ven = fecha_ven.strftime("%d/%m/%Y")
     
@@ -127,6 +136,7 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
                     fontsize=coords_oaxaca["fecha2"][2], 
                     color=coords_oaxaca["fecha2"][3])
 
+    # Insertar datos del vehículo
     for key in ["marca", "serie", "linea", "motor", "anio", "color"]:
         if key in datos:
             x, y, s, col = coords_oaxaca[key]
@@ -139,7 +149,7 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
                     fontsize=coords_oaxaca["nombre"][2], 
                     color=coords_oaxaca["nombre"][3])
 
-    # --- GENERAR QR DINÁMICO (NO TEXTO ESTÁTICO) ---
+    # ✅ INSERTAR QR DINÁMICO EN EL LUGAR EXACTO DONDE ESTABA EL TEXTO DEL FOLIO
     img_qr, url_qr = generar_qr_dinamico_oaxaca(folio)
     
     if img_qr:
@@ -148,10 +158,11 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
         buf.seek(0)
         qr_pix = fitz.Pixmap(buf.read())
 
-        x_qr = 56        # Posición X del QR de arriba izquierda
-        y_qr = 375       # Posición Y del QR de arriba izquierda  
-        ancho_qr = 140   # Ancho del QR
-        alto_qr = 140    # Alto del QR
+        # USAR LAS COORDENADAS EXACTAS DONDE ESTABA EL TEXTO DEL FOLIO
+        x_qr = coords_qr_dinamico["x"]
+        y_qr = coords_qr_dinamico["y"] 
+        ancho_qr = coords_qr_dinamico["ancho"]
+        alto_qr = coords_qr_dinamico["alto"]
 
         pg1.insert_image(
             fitz.Rect(x_qr, y_qr, x_qr + ancho_qr, y_qr + alto_qr),
@@ -159,8 +170,15 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
             overlay=True
         )
         
-        print(f"[QR INSERTADO] URL: {url_qr}")
+        print(f"[QR REEMPLAZA TEXTO] Folio {folio} en posición ({x_qr}, {y_qr})")
+        print(f"[URL QR] {url_qr}")
+    else:
+        # Si falla el QR, insertar al menos el folio como texto de respaldo
+        print(f"[FALLBACK] Insertando texto del folio como respaldo")
+        pg1.insert_text((coords_qr_dinamico["x"], coords_qr_dinamico["y"] + 20), 
+                       folio, fontsize=14, color=(1,0,0))
     
+    # Procesar segunda plantilla
     doc_segunda = fitz.open(PLANTILLA_OAXACA_SEGUNDA)
     pg2 = doc_segunda[0]
     
@@ -176,6 +194,7 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
                     fecha_exp.strftime("%H:%M:%S"), 
                     fontsize=coords_oaxaca_segunda["hora"][2])
     
+    # Combinar ambas plantillas
     doc_final = fitz.open()
     doc_final.insert_pdf(doc_original)
     doc_final.insert_pdf(doc_segunda)
