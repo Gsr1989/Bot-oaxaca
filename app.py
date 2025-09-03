@@ -40,7 +40,7 @@ storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
 # ------------ FOLIO OAXACA ------------
-folio_counter = {"count": 769}
+folio_counter = {"count": 669}
 def nuevo_folio() -> str:
     folio = f"1{folio_counter['count']}"
     folio_counter["count"] += 1
