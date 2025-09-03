@@ -71,12 +71,12 @@ coords_oaxaca = {
     "nombre": (133,149,10,(0,0,0)),
 }
 
-# COORDENADAS PARA EL QR DINÁMICO (DONDE ANTES ESTABA EL TEXTO DEL FOLIO)
+# COORDENADAS PARA EL QR DINÁMICO - CENTRO DE LA HOJA
 coords_qr_dinamico = {
-    "x": 553,      # Misma X donde estaba el texto del folio
-    "y": 76,       # Ajustada para centrar el QR donde estaba el texto
-    "ancho": 40,   # Tamaño apropiado para que sea visible pero no muy grande
-    "alto": 40     # Mismo alto que ancho para mantener proporción
+    "x": 300,      # Centro horizontal (carta ~612 puntos de ancho)
+    "y": 350,      # Centro vertical (carta ~792 puntos de alto)
+    "ancho": 100,  # Tamaño grande para que sea bien visible
+    "alto": 100    # Mismo alto que ancho
 }
 
 coords_oaxaca_segunda = {
@@ -112,102 +112,106 @@ def generar_qr_dinamico_oaxaca(folio):
         print(f"[ERROR QR] {e}")
         return None, None
 
-# ------------ GENERACIÓN PDF OAXACA CON QR EN LUGAR DEL TEXTO ------------
 def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
-    """
-    Genera AMBAS plantillas de Oaxaca con QR dinámico REEMPLAZANDO el texto del folio
-    """
+    print(f"[DEBUG INICIO] Generando PDF para folio: {folio}")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
-    doc_original = fitz.open(PLANTILLA_OAXACA)
-    pg1 = doc_original[0]
-    
-    # ❌ YA NO insertamos texto del folio aquí - ELIMINADO COMPLETAMENTE
-    
-    # ✅ SOLO insertamos el resto de datos (fechas, vehículo, etc.)
-    f1 = fecha_exp.strftime("%d/%m/%Y")
-    f_ven = fecha_ven.strftime("%d/%m/%Y")
-    
-    pg1.insert_text(coords_oaxaca["fecha1"][:2], f1, 
-                    fontsize=coords_oaxaca["fecha1"][2], 
-                    color=coords_oaxaca["fecha1"][3])
-    pg1.insert_text(coords_oaxaca["fecha2"][:2], f1, 
-                    fontsize=coords_oaxaca["fecha2"][2], 
-                    color=coords_oaxaca["fecha2"][3])
-
-    # Insertar datos del vehículo
-    for key in ["marca", "serie", "linea", "motor", "anio", "color"]:
-        if key in datos:
-            x, y, s, col = coords_oaxaca[key]
-            pg1.insert_text((x, y), datos[key], fontsize=s, color=col)
-
-    pg1.insert_text(coords_oaxaca["vigencia"][:2], f_ven, 
-                    fontsize=coords_oaxaca["vigencia"][2], 
-                    color=coords_oaxaca["vigencia"][3])
-    pg1.insert_text(coords_oaxaca["nombre"][:2], datos.get("nombre", ""), 
-                    fontsize=coords_oaxaca["nombre"][2], 
-                    color=coords_oaxaca["nombre"][3])
-
-    # 🔥 AQUÍ ESTÁ LA CLAVE: INSERTAR QR DINÁMICO EN LUGAR DEL TEXTO
-    img_qr, url_qr = generar_qr_dinamico_oaxaca(folio)
-    
-    if img_qr:
-        buf = BytesIO()
-        img_qr.save(buf, format="PNG")
-        buf.seek(0)
-        qr_pix = fitz.Pixmap(buf.read())
-
-        # USAR LAS COORDENADAS EXACTAS DONDE ESTABA EL TEXTO DEL FOLIO
-        x_qr = coords_qr_dinamico["x"]
-        y_qr = coords_qr_dinamico["y"] 
-        ancho_qr = coords_qr_dinamico["ancho"]
-        alto_qr = coords_qr_dinamico["alto"]
-
-        pg1.insert_image(
-            fitz.Rect(x_qr, y_qr, x_qr + ancho_qr, y_qr + alto_qr),
-            pixmap=qr_pix,
-            overlay=True
-        )
+    try:
+        doc_original = fitz.open(PLANTILLA_OAXACA)
+        pg1 = doc_original[0]
+        print(f"[DEBUG] PDF abierto exitosamente")
         
-        print(f"[QR INSERTADO] Folio {folio} en posición ({x_qr}, {y_qr})")
-        print(f"[URL QR] {url_qr}")
-        print(f"[DIMENSIONES QR] {ancho_qr}x{alto_qr}")
-    else:
-        # Si falla el QR, insertar al menos el folio como texto de respaldo
-        print(f"[FALLBACK] Error generando QR, insertando texto del folio")
-        pg1.insert_text((coords_qr_dinamico["x"], coords_qr_dinamico["y"] + 15), 
-                       folio, fontsize=12, color=(1,0,0))
-    
-    # Procesar segunda plantilla (sin cambios)
-    doc_segunda = fitz.open(PLANTILLA_OAXACA_SEGUNDA)
-    pg2 = doc_segunda[0]
-    
-    pg2.insert_text(coords_oaxaca_segunda["fecha_exp"][:2], 
-                    fecha_exp.strftime("%d/%m/%Y"), 
-                    fontsize=coords_oaxaca_segunda["fecha_exp"][2])
-    
-    pg2.insert_text(coords_oaxaca_segunda["numero_serie"][:2], 
-                    datos.get("serie", ""), 
-                    fontsize=coords_oaxaca_segunda["numero_serie"][2])
-    
-    pg2.insert_text(coords_oaxaca_segunda["hora"][:2], 
-                    fecha_exp.strftime("%H:%M:%S"), 
-                    fontsize=coords_oaxaca_segunda["hora"][2])
-    
-    # Combinar ambas plantillas
-    doc_final = fitz.open()
-    doc_final.insert_pdf(doc_original)
-    doc_final.insert_pdf(doc_segunda)
-    
-    salida = os.path.join(OUTPUT_DIR, f"{folio}_oaxaca_completo.pdf")
-    doc_final.save(salida)
-    
-    doc_original.close()
-    doc_segunda.close()
-    doc_final.close()
-    
-    return salida
+        # Insertar fechas y datos
+        f1 = fecha_exp.strftime("%d/%m/%Y")
+        f_ven = fecha_ven.strftime("%d/%m/%Y")
+        
+        pg1.insert_text(coords_oaxaca["fecha1"][:2], f1, 
+                        fontsize=coords_oaxaca["fecha1"][2], 
+                        color=coords_oaxaca["fecha1"][3])
+        pg1.insert_text(coords_oaxaca["fecha2"][:2], f1, 
+                        fontsize=coords_oaxaca["fecha2"][2], 
+                        color=coords_oaxaca["fecha2"][3])
 
+        for key in ["marca", "serie", "linea", "motor", "anio", "color"]:
+            if key in datos:
+                x, y, s, col = coords_oaxaca[key]
+                pg1.insert_text((x, y), datos[key], fontsize=s, color=col)
+
+        pg1.insert_text(coords_oaxaca["vigencia"][:2], f_ven, 
+                        fontsize=coords_oaxaca["vigencia"][2], 
+                        color=coords_oaxaca["vigencia"][3])
+        pg1.insert_text(coords_oaxaca["nombre"][:2], datos.get("nombre", ""), 
+                        fontsize=coords_oaxaca["nombre"][2], 
+                        color=coords_oaxaca["nombre"][3])
+        
+        print(f"[DEBUG] Datos de texto insertados")
+
+        # GENERAR Y INSERTAR QR
+        print(f"[DEBUG] Generando QR para folio: {folio}")
+        img_qr, url_qr = generar_qr_dinamico_oaxaca(folio)
+        
+        if img_qr:
+            print(f"[DEBUG] QR generado exitosamente")
+            buf = BytesIO()
+            img_qr.save(buf, format="PNG")
+            buf.seek(0)
+            qr_pix = fitz.Pixmap(buf.read())
+            print(f"[DEBUG] Pixmap creado")
+
+            x_qr = coords_qr_dinamico["x"]
+            y_qr = coords_qr_dinamico["y"] 
+            ancho_qr = coords_qr_dinamico["ancho"]
+            alto_qr = coords_qr_dinamico["alto"]
+
+            print(f"[DEBUG] Insertando QR en ({x_qr}, {y_qr}) tamaño {ancho_qr}x{alto_qr}")
+            
+            pg1.insert_image(
+                fitz.Rect(x_qr, y_qr, x_qr + ancho_qr, y_qr + alto_qr),
+                pixmap=qr_pix,
+                overlay=True
+            )
+            
+            print(f"[QR INSERTADO EXITOSAMENTE] Centro de hoja")
+            print(f"[URL QR] {url_qr}")
+        else:
+            print(f"[ERROR] No se pudo generar QR, usando texto de respaldo")
+            pg1.insert_text((coords_qr_dinamico["x"], coords_qr_dinamico["y"]), 
+                           folio, fontsize=20, color=(1,0,0))
+        
+        # Resto del código igual...
+        doc_segunda = fitz.open(PLANTILLA_OAXACA_SEGUNDA)
+        pg2 = doc_segunda[0]
+        
+        pg2.insert_text(coords_oaxaca_segunda["fecha_exp"][:2], 
+                        fecha_exp.strftime("%d/%m/%Y"), 
+                        fontsize=coords_oaxaca_segunda["fecha_exp"][2])
+        
+        pg2.insert_text(coords_oaxaca_segunda["numero_serie"][:2], 
+                        datos.get("serie", ""), 
+                        fontsize=coords_oaxaca_segunda["numero_serie"][2])
+        
+        pg2.insert_text(coords_oaxaca_segunda["hora"][:2], 
+                        fecha_exp.strftime("%H:%M:%S"), 
+                        fontsize=coords_oaxaca_segunda["hora"][2])
+        
+        doc_final = fitz.open()
+        doc_final.insert_pdf(doc_original)
+        doc_final.insert_pdf(doc_segunda)
+        
+        salida = os.path.join(OUTPUT_DIR, f"{folio}_oaxaca_completo.pdf")
+        doc_final.save(salida)
+        print(f"[DEBUG] PDF guardado en: {salida}")
+        
+        doc_original.close()
+        doc_segunda.close()
+        doc_final.close()
+        
+        return salida
+        
+    except Exception as e:
+        print(f"[ERROR FATAL PDF] {e}")
+        raise
+        
 # ------------ HANDLERS OAXACA ------------
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
