@@ -75,8 +75,8 @@ coords_oaxaca = {
 
 # COORDENADAS PARA EL QR DINÁMICO - CENTRO DE LA HOJA
 coords_qr_dinamico = {
-    "x": 500,      # Centro horizontal (carta ~612 puntos de ancho)
-    "y": 97,      # Centro vertical (carta ~792 puntos de alto)
+    "x": 486,      # Centro horizontal (carta ~612 puntos de ancho)
+    "y": 100,      # Centro vertical (carta ~792 puntos de alto)
     "ancho": 100,  # Tamaño grande para que sea bien visible
     "alto": 100    # Mismo alto que ancho
 }
