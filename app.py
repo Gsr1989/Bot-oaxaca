@@ -59,6 +59,7 @@ class PermisoForm(StatesGroup):
 # ------------ COORDENADAS OAXACA (SIN FOLIO TEXTO) ------------
 coords_oaxaca = {
     # ELIMINAMOS "folio" porque ahora será QR dinámico
+    "folio": (553,96,16,(1,0,0)),
     "fecha1": (168,130,12,(0,0,0)),
     "fecha2": (140,540,10,(0,0,0)),
     "marca": (50,215,12,(0,0,0)),
@@ -73,8 +74,8 @@ coords_oaxaca = {
 
 # COORDENADAS PARA EL QR DINÁMICO - CENTRO DE LA HOJA
 coords_qr_dinamico = {
-    "x": 300,      # Centro horizontal (carta ~612 puntos de ancho)
-    "y": 350,      # Centro vertical (carta ~792 puntos de alto)
+    "x": 553,      # Centro horizontal (carta ~612 puntos de ancho)
+    "y": 97,      # Centro vertical (carta ~792 puntos de alto)
     "ancho": 100,  # Tamaño grande para que sea bien visible
     "alto": 100    # Mismo alto que ancho
 }
