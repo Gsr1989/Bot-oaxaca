@@ -217,8 +217,8 @@ coords_oaxaca = {
 
 # QR dinámico en posición diferente
 coords_qr_dinamico = {
-    "x": 400,
-    "y": 350,
+    "x": 486,
+    "y": 100,
     "ancho": 100,
     "alto": 100
 }
