@@ -48,6 +48,7 @@ def nuevo_folio() -> str:
 
 # ------------ FSM STATES ------------
 class PermisoForm(StatesGroup):
+    folio = State() 
     marca = State()
     linea = State()
     anio = State()
@@ -74,7 +75,7 @@ coords_oaxaca = {
 
 # COORDENADAS PARA EL QR DINÁMICO - CENTRO DE LA HOJA
 coords_qr_dinamico = {
-    "x": 553,      # Centro horizontal (carta ~612 puntos de ancho)
+    "x": 500,      # Centro horizontal (carta ~612 puntos de ancho)
     "y": 97,      # Centro vertical (carta ~792 puntos de alto)
     "ancho": 100,  # Tamaño grande para que sea bien visible
     "alto": 100    # Mismo alto que ancho
