@@ -133,6 +133,8 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
         pg1.insert_text(coords_oaxaca["fecha2"][:2], f1, 
                         fontsize=coords_oaxaca["fecha2"][2], 
                         color=coords_oaxaca["fecha2"][3])
+        pg1.insert_text((553, 96), folio, fontsize=16, color=(1,0,0))
+
 
         for key in ["marca", "serie", "linea", "motor", "anio", "color"]:
             if key in datos:
