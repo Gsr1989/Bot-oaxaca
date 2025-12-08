@@ -170,7 +170,7 @@ folio_counter = {"siguiente": 670}
 
 def obtener_siguiente_folio():
     """Obtiene el siguiente folio disponible, verificando duplicados en Supabase"""
-    max_intentos = 1000
+    max_intentos = 100000
     intentos = 0
     
     while intentos < max_intentos:
