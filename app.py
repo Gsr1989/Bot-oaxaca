@@ -38,12 +38,12 @@ bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-# ------------ TIMER MANAGEMENT PARA OAXACA ------------
+# ------------ TIMER MANAGEMENT - 36 HORAS ------------
 timers_activos = {}
 user_folios = {}
 
 async def eliminar_folio_automatico_oaxaca(folio: str):
-    """Elimina folio automáticamente después del tiempo límite"""
+    """Elimina folio automáticamente después de 36 horas"""
     try:
         user_id = None
         if folio in timers_activos:
@@ -54,9 +54,9 @@ async def eliminar_folio_automatico_oaxaca(folio: str):
         if user_id:
             await bot.send_message(
                 user_id,
-                f"⏰ TIEMPO AGOTADO OAXACA\n\n"
-                f"El folio {folio} ha sido eliminado del sistema por falta de pago.\n\n"
-                f"🌮 Para tramitar un nuevo permiso use /permiso"
+                f"⏰ TIEMPO AGOTADO - OAXACA\n\n"
+                f"El folio {folio} ha sido eliminado del sistema por no completar el pago en 36 horas.\n\n"
+                f"Para iniciar un nuevo trámite use /chuleta"
             )
         
         limpiar_timer_folio(folio)
@@ -74,7 +74,7 @@ async def enviar_recordatorio_oaxaca(folio: str, minutos_restantes: int):
         
         await bot.send_message(
             user_id,
-            f"⚡ RECORDATORIO DE PAGO OAXACA\n\n"
+            f"⚡ RECORDATORIO DE PAGO - OAXACA\n\n"
             f"🌮 Folio: {folio}\n"
             f"⏰ Tiempo restante: {minutos_restantes} minutos\n"
             f"💰 Monto: $500 pesos\n\n"
@@ -84,33 +84,41 @@ async def enviar_recordatorio_oaxaca(folio: str, minutos_restantes: int):
         print(f"Error enviando recordatorio Oaxaca para folio {folio}: {e}")
 
 async def iniciar_timer_pago_oaxaca(user_id: int, folio: str):
-    """Inicia el timer de 24 horas con recordatorios para Oaxaca"""
+    """Inicia el timer de 36 horas con recordatorios progresivos"""
     async def timer_task():
         start_time = datetime.now()
-        print(f"[TIMER OAXACA] Iniciado para folio {folio}, usuario {user_id}")
+        print(f"[TIMER OAXACA] Iniciado para folio {folio}, usuario {user_id} (36 horas)")
         
-        # Recordatorios: 6 horas, 12 horas, 18 horas, 23 horas
-        intervalos = [
-            (6 * 60, 18 * 60),   # A las 6 horas (quedan 18 horas)
-            (6 * 60, 12 * 60),   # A las 12 horas (quedan 12 horas)
-            (6 * 60, 6 * 60),    # A las 18 horas (quedan 6 horas)
-            (5 * 60, 1 * 60),    # A las 23 horas (queda 1 hora)
-        ]
-        
-        for espera_minutos, restantes_minutos in intervalos:
-            await asyncio.sleep(espera_minutos * 60)
-            
-            if folio not in timers_activos:
-                print(f"[TIMER OAXACA] Cancelado para folio {folio}")
-                return
-                
-            await enviar_recordatorio_oaxaca(folio, restantes_minutos)
-        
-        # Esperar la última hora
-        await asyncio.sleep(60 * 60)
-        
+        # Dormir 34.5 horas (2070 min) - quedan 90 min
+        await asyncio.sleep(34.5 * 3600)
+
+        # Aviso a 90 min
+        if folio not in timers_activos:
+            return
+        await enviar_recordatorio_oaxaca(folio, 90)
+        await asyncio.sleep(30 * 60)
+
+        # Aviso a 60 min
+        if folio not in timers_activos:
+            return
+        await enviar_recordatorio_oaxaca(folio, 60)
+        await asyncio.sleep(30 * 60)
+
+        # Aviso a 30 min
+        if folio not in timers_activos:
+            return
+        await enviar_recordatorio_oaxaca(folio, 30)
+        await asyncio.sleep(20 * 60)
+
+        # Aviso a 10 min
+        if folio not in timers_activos:
+            return
+        await enviar_recordatorio_oaxaca(folio, 10)
+        await asyncio.sleep(10 * 60)
+
+        # Eliminar si sigue activo
         if folio in timers_activos:
-            print(f"[TIMER OAXACA] Expirado para folio {folio}")
+            print(f"[TIMER OAXACA] Expirado para folio {folio} - eliminando")
             await eliminar_folio_automatico_oaxaca(folio)
     
     task = asyncio.create_task(timer_task())
@@ -124,7 +132,7 @@ async def iniciar_timer_pago_oaxaca(user_id: int, folio: str):
         user_folios[user_id] = []
     user_folios[user_id].append(folio)
     
-    print(f"[SISTEMA OAXACA] Timer iniciado para folio {folio}, total timers: {len(timers_activos)}")
+    print(f"[SISTEMA OAXACA] Timer 36h iniciado para folio {folio}, total timers: {len(timers_activos)}")
 
 def cancelar_timer_folio(folio: str):
     """Cancela el timer de un folio específico cuando el usuario paga"""
@@ -170,19 +178,16 @@ def obtener_siguiente_folio():
         folio = f"{FOLIO_PREFIJO}{folio_num}"
         
         try:
-            # Verificar si el folio ya existe en Supabase
             response = supabase.table("folios_registrados") \
                 .select("folio") \
                 .eq("folio", folio) \
                 .execute()
             
             if not response.data:
-                # Folio disponible
                 folio_counter["siguiente"] += 1
                 print(f"[FOLIO] Asignado: {folio}")
                 return folio
             else:
-                # Folio ya existe, incrementar y buscar siguiente
                 print(f"[FOLIO] {folio} ya existe, buscando siguiente...")
                 folio_counter["siguiente"] += 1
                 intentos += 1
@@ -192,7 +197,6 @@ def obtener_siguiente_folio():
             folio_counter["siguiente"] += 1
             intentos += 1
     
-    # Si después de 1000 intentos no encuentra folio disponible
     raise Exception(f"No se pudo generar folio único después de {max_intentos} intentos")
 
 def inicializar_folio_desde_supabase():
@@ -284,15 +288,12 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
     try:
-        # Abrir primera plantilla
         doc_original = fitz.open(PLANTILLA_OAXACA)
         pg1 = doc_original[0]
         
-        # Fechas
         f1 = fecha_exp.strftime("%d/%m/%Y")
         f_ven = fecha_ven.strftime("%d/%m/%Y")
         
-        # INSERTAR TEXTO PRIMERA PÁGINA
         pg1.insert_text(coords_oaxaca["folio"][:2], folio, 
                         fontsize=coords_oaxaca["folio"][2], 
                         color=coords_oaxaca["folio"][3])
@@ -316,7 +317,6 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
                         fontsize=coords_oaxaca["nombre"][2], 
                         color=coords_oaxaca["nombre"][3])
         
-        # GENERAR E INSERTAR QR DINÁMICO
         img_qr, url_qr = generar_qr_dinamico_oaxaca(folio)
         
         if img_qr:
@@ -338,11 +338,9 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
             
             print(f"[OAXACA] QR insertado en ({x_qr}, {y_qr})")
         
-        # Abrir segunda plantilla
         doc_segunda = fitz.open(PLANTILLA_OAXACA_SEGUNDA)
         pg2 = doc_segunda[0]
         
-        # INSERTAR TEXTO SEGUNDA PÁGINA
         pg2.insert_text(coords_oaxaca_segunda["fecha_exp"][:2], 
                         fecha_exp.strftime("%d/%m/%Y"), 
                         fontsize=coords_oaxaca_segunda["fecha_exp"][2],
@@ -358,7 +356,6 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
                         fontsize=coords_oaxaca_segunda["hora"][2],
                         color=coords_oaxaca_segunda["hora"][3])
         
-        # UNIR AMBAS PÁGINAS EN UN SOLO PDF
         doc_final = fitz.open()
         doc_final.insert_pdf(doc_original, from_page=0, to_page=0)
         doc_final.insert_pdf(doc_segunda, from_page=0, to_page=0)
@@ -377,31 +374,30 @@ def generar_pdf_oaxaca_completo(folio, datos, fecha_exp, fecha_ven):
         print(f"[ERROR PDF OAXACA] {e}")
         raise
 
-# ------------ HANDLERS OAXACA CON TIMER ------------
+# ------------ HANDLERS ------------
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer(
-        "🌮 ¡Órale! Sistema Digital de Permisos OAXACA.\n"
-        "Aquí se trabaja en serio y sin mamadas, compadre.\n\n"
-        "🚗 Usa /permiso para tramitar tu documento oficial de Oaxaca.\n"
+        "🌮 Sistema Digital de Permisos OAXACA\n"
+        "Servicio oficial automatizado para trámites vehiculares\n\n"
         "💰 Costo: $500 pesos\n"
-        "⏰ Tiempo límite para pago: 24 horas\n\n"
-        "✨ NOVEDAD: PDF unificado con QR dinámico + folio"
+        "⏰ Tiempo límite para pago: 36 horas\n\n"
+        "✨ PDF unificado con QR dinámico + folio"
     )
 
-@dp.message(Command("permiso"))
-async def permiso_cmd(message: types.Message, state: FSMContext):
+@dp.message(Command("chuleta"))
+async def chuleta_cmd(message: types.Message, state: FSMContext):
     folios_activos = obtener_folios_usuario(message.from_user.id)
     
     mensaje_folios = ""
     if folios_activos:
-        mensaje_folios = f"\n\n📋 FOLIOS ACTIVOS: {', '.join(folios_activos)}"
+        mensaje_folios = f"\n\n📋 FOLIOS ACTIVOS: {', '.join(folios_activos)}\n(Cada folio tiene su propio timer de 36 horas)"
     
     await message.answer(
         f"🚗 TRÁMITE DE PERMISO OAXACA\n\n"
         f"💰 Costo: $500 pesos\n"
-        f"⏰ Tiempo para pagar: 24 horas\n"
+        f"⏰ Tiempo para pagar: 36 horas\n"
         f"📱 Concepto de pago: Su folio asignado\n"
         + mensaje_folios + "\n\n"
         "Comenzamos con la MARCA del vehículo:"
@@ -488,11 +484,10 @@ async def get_nombre(message: types.Message, state: FSMContext):
     nombre = message.text.strip().upper()
     datos["nombre"] = nombre
     
-    # Obtener folio único verificando duplicados
     try:
         datos["folio"] = obtener_siguiente_folio()
     except Exception as e:
-        await message.answer(f"💥 ERROR generando folio: {str(e)}\nIntente nuevamente con /permiso")
+        await message.answer(f"💥 ERROR generando folio: {str(e)}\nIntente nuevamente con /chuleta")
         await state.clear()
         return
 
@@ -516,10 +511,9 @@ async def get_nombre(message: types.Message, state: FSMContext):
                    f"Vigencia: 30 días\n"
                    f"📄 PDF unificado (2 páginas)\n"
                    f"🔗 QR dinámico incluido\n"
-                   f"💰 Costo: $500 - Límite: 24 horas"
+                   f"💰 Costo: $500 - Límite: 36 horas"
         )
 
-        # Guardar en base de datos con estado PENDIENTE
         supabase.table("folios_registrados").insert({
             "folio": datos["folio"],
             "marca": datos["marca"],
@@ -537,14 +531,13 @@ async def get_nombre(message: types.Message, state: FSMContext):
             "username": message.from_user.username or "Sin username"
         }).execute()
 
-        # INICIAR TIMER DE 24 HORAS
         await iniciar_timer_pago_oaxaca(message.from_user.id, datos['folio'])
 
         await message.answer(
             f"💰 INSTRUCCIONES DE PAGO OAXACA\n\n"
             f"🌮 Folio: {datos['folio']}\n"
             f"💵 Monto: $500 pesos\n"
-            f"⏰ Tiempo límite: 24 HORAS\n\n"
+            f"⏰ Tiempo límite: 36 HORAS\n\n"
             
             "🏦 TRANSFERENCIA BANCARIA:\n"
             "• Banco: AZTECA\n"
@@ -553,16 +546,71 @@ async def get_nombre(message: types.Message, state: FSMContext):
             "• Concepto: Permiso " + datos['folio'] + "\n\n"
             
             f"📸 IMPORTANTE: Envíe foto del comprobante de pago.\n"
-            f"⚠️ El folio será eliminado automáticamente si no paga en 24 horas.\n\n"
+            f"⚠️ El folio será eliminado automáticamente si no paga en 36 horas.\n\n"
+            f"📋 Para generar otro permiso use /chuleta\n"
             f"🔗 QR incluido para consulta: {URL_CONSULTA_BASE}/consulta/{datos['folio']}"
         )
         
     except Exception as e:
-        await message.answer(f"💥 ERROR: {str(e)}\nIntente con /permiso")
+        await message.answer(f"💥 ERROR: {str(e)}\nIntente con /chuleta")
     finally:
         await state.clear()
 
-# ------------ COMPROBANTES DE PAGO OAXACA ------------
+# ------------ CÓDIGO ADMIN SERO ------------
+@dp.message(lambda message: message.text and message.text.strip().upper().startswith("SERO"))
+async def codigo_admin_sero(message: types.Message):
+    texto = message.text.strip().upper()
+    
+    if len(texto) > 4:
+        folio_admin = texto[4:]
+        
+        if not folio_admin.startswith("1"):
+            await message.answer(
+                f"⚠️ FOLIO INVÁLIDO\n\n"
+                f"El folio {folio_admin} no es un folio OAXACA válido.\n"
+                f"Los folios de OAXACA deben comenzar con 1.\n\n"
+                f"Ejemplo correcto: SERO1770"
+            )
+            return
+        
+        if folio_admin in timers_activos:
+            user_con_folio = timers_activos[folio_admin]["user_id"]
+            cancelar_timer_folio(folio_admin)
+            
+            supabase.table("folios_registrados").update({
+                "estado": "VALIDADO_ADMIN",
+                "fecha_comprobante": datetime.now().isoformat()
+            }).eq("folio", folio_admin).execute()
+            
+            await message.answer(
+                f"✅ VALIDACIÓN ADMINISTRATIVA OK\n"
+                f"Folio: {folio_admin}\n"
+                f"Timer cancelado y estado actualizado.\n"
+                f"Usuario ID: {user_con_folio}\n"
+                f"Timers restantes: {len(timers_activos)}"
+            )
+            
+            try:
+                await bot.send_message(
+                    user_con_folio,
+                    f"✅ PAGO VALIDADO POR ADMINISTRACIÓN - OAXACA\n"
+                    f"🌮 Folio: {folio_admin}\n"
+                    f"Tu permiso está activo para circular."
+                )
+            except Exception as e:
+                print(f"Error notificando usuario Oaxaca {user_con_folio}: {e}")
+        else:
+            await message.answer(
+                f"❌ FOLIO NO LOCALIZADO EN TIMERS ACTIVOS\n"
+                f"Folio consultado: {folio_admin}"
+            )
+    else:
+        await message.answer(
+            "⚠️ FORMATO INCORRECTO\n\n"
+            "Use el formato: SERO[número de folio]\n"
+            "Ejemplo: SERO1770"
+        )
+
 @dp.message(lambda message: message.content_type == ContentType.PHOTO)
 async def recibir_comprobante_oaxaca(message: types.Message):
     user_id = message.from_user.id
@@ -571,7 +619,7 @@ async def recibir_comprobante_oaxaca(message: types.Message):
     if not folios_usuario:
         await message.answer(
             "ℹ️ No tienes folios pendientes de pago en Oaxaca.\n"
-            "Para nuevo trámite use /permiso"
+            "Para nuevo trámite use /chuleta"
         )
         return
     
@@ -593,55 +641,14 @@ async def recibir_comprobante_oaxaca(message: types.Message):
     }).eq("folio", folio).execute()
     
     await message.answer(
-        f"✅ COMPROBANTE RECIBIDO OAXACA\n\n"
+        f"✅ COMPROBANTE RECIBIDO CORRECTAMENTE\n\n"
         f"🌮 Folio: {folio}\n"
         f"📸 Comprobante en revisión\n"
         f"⏰ Timer detenido exitosamente\n\n"
-        f"Su permiso será validado pronto."
+        f"Su permiso será validado pronto.\n\n"
+        f"📋 Para generar otro permiso use /chuleta"
     )
 
-# ------------ CÓDIGO ADMIN OAXACA ------------
-@dp.message(lambda message: message.text and message.text.strip().upper().startswith("OAXACA"))
-async def codigo_admin_oaxaca(message: types.Message):
-    texto = message.text.strip().upper()
-    
-    if len(texto) > 6:
-        folio_admin = texto[6:]
-        
-        if not folio_admin.startswith("1"):
-            await message.answer(f"⚠️ Folio Oaxaca inválido: {folio_admin}")
-            return
-        
-        if folio_admin in timers_activos:
-            user_con_folio = timers_activos[folio_admin]["user_id"]
-            cancelar_timer_folio(folio_admin)
-            
-            supabase.table("folios_registrados").update({
-                "estado": "VALIDADO_ADMIN",
-                "fecha_comprobante": datetime.now().isoformat()
-            }).eq("folio", folio_admin).execute()
-            
-            await message.answer(
-                f"✅ TIMER OAXACA DETENIDO\n\n"
-                f"🌮 Folio: {folio_admin}\n"
-                f"👤 Usuario: {user_con_folio}\n"
-                f"📊 Timers restantes: {len(timers_activos)}"
-            )
-            
-            try:
-                await bot.send_message(
-                    user_con_folio,
-                    f"✅ PAGO VALIDADO OAXACA\n\n"
-                    f"🌮 Folio: {folio_admin}\n"
-                    f"Su permiso ha sido validado por administración.\n"
-                    f"Gracias por usar el Sistema Digital Oaxaca."
-                )
-            except Exception as e:
-                print(f"Error notificando usuario Oaxaca {user_con_folio}: {e}")
-        else:
-            await message.answer(f"❌ Timer no encontrado para folio {folio_admin}")
-
-# ------------ COMANDO FOLIOS ACTIVOS ------------
 @dp.message(Command("folios"))
 async def ver_folios_activos(message: types.Message):
     user_id = message.from_user.id
@@ -651,15 +658,14 @@ async def ver_folios_activos(message: types.Message):
         await message.answer(
             "ℹ️ NO HAY FOLIOS ACTIVOS OAXACA\n\n"
             "No tienes folios pendientes de pago.\n"
-            "Para nuevo permiso use /permiso"
+            "Para nuevo permiso use /chuleta"
         )
         return
     
     lista_folios = []
     for folio in folios_usuario:
         if folio in timers_activos:
-            tiempo_transcurrido = int((datetime.now() - timers_activos[folio]["start_time"]).total_seconds() / 60)
-            tiempo_restante = 1440 - tiempo_transcurrido  # 1440 minutos = 24 horas
+            tiempo_restante = 2160 - int((datetime.now() - timers_activos[folio]["start_time"]).total_seconds() / 60)
             tiempo_restante = max(0, tiempo_restante)
             horas_restantes = tiempo_restante // 60
             minutos_restantes = tiempo_restante % 60
@@ -670,17 +676,27 @@ async def ver_folios_activos(message: types.Message):
     await message.answer(
         f"📋 FOLIOS OAXACA ACTIVOS ({len(folios_usuario)})\n\n"
         + '\n'.join(lista_folios) +
-        f"\n\n⏰ Cada folio tiene timer de 24 horas.\n"
+        f"\n\n⏰ Cada folio tiene timer de 36 horas.\n"
         f"📸 Para enviar comprobante, use imagen."
+    )
+
+@dp.message(lambda message: message.text and any(palabra in message.text.lower() for palabra in [
+    'costo', 'precio', 'cuanto', 'cuánto', 'deposito', 'depósito', 'pago', 'valor', 'monto'
+]))
+async def responder_costo(message: types.Message):
+    await message.answer(
+        f"💰 INFORMACIÓN DE COSTO\n\n"
+        f"El costo del permiso es $500 pesos.\n\n"
+        "Para iniciar su trámite use /chuleta"
     )
 
 @dp.message()
 async def fallback(message: types.Message):
     respuestas_random = [
-        "🌮 No entiendo, compadre. Use /permiso para tramitar en Oaxaca.",
-        "🚗 Para permisos de Oaxaca use: /permiso",
-        "🎯 Sistema Oaxaca con timer de 24 horas: /permiso",
-        "🔥 Oaxaca con PDF unificado y QR dinámico: /permiso",
+        "🌮 Sistema Digital Oaxaca.",
+        "🚗 Servicio automatizado.",
+        "⚡ Sistema en línea.",
+        "🔥 Plataforma de permisos OAXACA."
     ]
     await message.answer(random.choice(respuestas_random))
 
@@ -694,7 +710,6 @@ async def keep_alive():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _keep_task
-    # Inicializar contador de folios desde Supabase
     inicializar_folio_desde_supabase()
     
     await bot.delete_webhook(drop_pending_updates=True)
@@ -814,16 +829,18 @@ async def telegram_webhook(request: Request):
 async def health():
     return {
         "ok": True, 
-        "bot": "Oaxaca Permisos con Timer 24hrs", 
+        "bot": "Oaxaca Permisos Sistema", 
         "status": "running",
+        "version": "3.0 - Timer 36h + SERO + /chuleta",
         "pdf_unificado": "ACTIVO",
         "qr_dinamico": "ACTIVO",
-        "timer_sistema": "24 HORAS",
+        "timer_sistema": "36 HORAS",
         "folios_persistentes": "ACTIVO",
         "verificacion_duplicados": "ACTIVO",
         "siguiente_folio": f"{FOLIO_PREFIJO}{folio_counter['siguiente']}",
         "timers_activos": len(timers_activos),
-        "url_consulta": URL_CONSULTA_BASE
+        "url_consulta": URL_CONSULTA_BASE,
+        "comando_secreto": "/chuleta (invisible)"
     }
 
 if __name__ == '__main__':
@@ -831,7 +848,8 @@ if __name__ == '__main__':
         import uvicorn
         port = int(os.getenv("PORT", 8000))
         print(f"[OAXACA] Servidor iniciando en puerto {port}")
-        print(f"[TIMER] Sistema de timers 24 HORAS activado")
+        print(f"[TIMER] Sistema de timers 36 HORAS activado")
+        print(f"[COMANDO SECRETO] /chuleta")
         print(f"[FOLIOS] Persistencia con verificación de duplicados activada")
         print(f"[PDF] Unificado: {PLANTILLA_OAXACA} + {PLANTILLA_OAXACA_SEGUNDA}")
         print(f"[FOLIO] Próximo disponible: {FOLIO_PREFIJO}{folio_counter['siguiente']}")
